@@ -1,0 +1,17 @@
+# Eclipse
+.metadata/
+
+# Node
+node_modules/
+
+# Build
+build/
+dist/
+target/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
