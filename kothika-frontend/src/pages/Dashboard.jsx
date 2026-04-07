@@ -1,76 +1,38 @@
-import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Plus, Clock, User, Tag as TagIcon, X, AlertCircle, Edit2, Trash2 } from 'lucide-react';
-
-// ⚠️ IMPORTANT: FOR YOUR LOCAL VS CODE ⚠️
-// 1. Uncomment the THREE import lines below to use your real backend:
-// import { postService } from '../api/postService';
-// import { categoryService } from '../api/categoryService';
-// import { tagService } from '../api/tagService';
-
-// 2. Delete the temporary mock service objects below before saving in your local editor!
-const postService = {
-  getAllPosts: async () => ({ data: [
-    {
-      id: '1',
-      title: 'Tech Trends 2026',
-      content: 'Technology is evolving rapidly with AI, cloud computing, and automation transforming industries...',
-      categoryName: 'TECHNOLOGY',
-      status: 'PUBLISHED',
-      authorName: 'Deepak',
-      readingTime: 5,
-      tags: [{ id: '1', name: 'Technology' }, { id: '2', name: 'AI' }]
-    },
-    {
-      id: '2',
-      title: 'Future Tech 2026',
-      content: 'Artificial Intelligence, cloud computing, and automation are reshaping modern industries...',
-      categoryName: 'TECHNOLOGY',
-      status: 'PUBLISHED',
-      authorName: 'Deepak',
-      readingTime: 6,
-      tags: [{ id: '1', name: 'Technology' }, { id: '3', name: 'Automation' }]
-    }
-  ] }),
-  createPost: async (data) => ({ data: { ...data, id: Date.now().toString(), authorName: 'You' } }),
-  updatePost: async (id, data) => ({ data: { ...data, id, authorName: 'You' } }),
-  deletePost: async (id) => ({ data: 'Post deleted successfully' })
-};
-const categoryService = {
-  getAllCategories: async () => ({ data: [{ id: '1', name: 'Technology' }, { id: '2', name: 'Lifestyle' }] })
-};
-const tagService = {
-  getAllTags: async () => ({ data: [{ id: '1', name: 'AI' }, { id: '2', name: 'Cloud' }, { id: '3', name: 'Java' }] })
-};
+import React, { useState, useEffect, useContext } from 'react';
+import { Plus, Clock, User, Tag as TagIcon, X, AlertCircle, Edit2, Trash2, Feather, MoreHorizontal } from 'lucide-react';
+import { postService } from '../api/postService';
+import { categoryService } from '../api/categoryService';
+import { tagService } from '../api/tagService';
+import { AuthContext } from '../context/AuthContext';
 
 const Dashboard = () => {
+  const { user } = useContext(AuthContext);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // --- MODAL & FORM STATE ---
   const [showModal, setShowModal] = useState(false);
-  const [editingPostId, setEditingPostId] = useState(null); // Tracks if we are editing an existing post
+  const [editingPostId, setEditingPostId] = useState(null);
   const [categories, setCategories] = useState([]);
   const [tags, setTags] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
-  
+  const [activeMenu, setActiveMenu] = useState(null);
+
   const initialFormState = {
     title: '',
     content: '',
     categoryId: '',
     tagIds: [],
     status: 'DRAFT',
-    readingTime: ''
+    readingTime: '',
   };
   const [formData, setFormData] = useState(initialFormState);
 
-  // Fetch posts on load
   useEffect(() => {
     fetchPosts();
   }, []);
 
-  // Fetch Categories & Tags ONLY when the modal opens
   useEffect(() => {
     if (showModal && categories.length === 0) {
       loadFormData();
@@ -81,7 +43,6 @@ const Dashboard = () => {
     try {
       setLoading(true);
       const response = await postService.getAllPosts();
-      
       if (Array.isArray(response.data)) {
         setPosts(response.data);
       } else if (response.data && Array.isArray(response.data.content)) {
@@ -100,116 +61,99 @@ const Dashboard = () => {
     try {
       const [catsRes, tagsRes] = await Promise.all([
         categoryService.getAllCategories(),
-        tagService.getAllTags()
+        tagService.getAllTags(),
       ]);
       setCategories(catsRes.data || []);
       setTags(tagsRes.data || []);
       return { loadedCats: catsRes.data || [], loadedTags: tagsRes.data || [] };
     } catch (err) {
-      setFormError('Failed to load categories or tags from server.');
+      setFormError('Failed to load categories or tags.');
       return { loadedCats: [], loadedTags: [] };
     }
   };
 
-  // --- FORM & ACTION HANDLERS ---
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleTagToggle = (tagId) => {
-    setFormData(prev => {
-      const isSelected = prev.tagIds.includes(tagId);
-      return {
-        ...prev,
-        tagIds: isSelected 
-          ? prev.tagIds.filter(id => id !== tagId) 
-          : [...prev.tagIds, tagId]
-      };
-    });
+    setFormData((prev) => ({
+      ...prev,
+      tagIds: prev.tagIds.includes(tagId)
+        ? prev.tagIds.filter((id) => id !== tagId)
+        : [...prev.tagIds, tagId],
+    }));
   };
 
   const handleEditClick = async (post) => {
-    // 1. Ensure categories and tags are loaded first
     let currentCats = categories;
     let currentTags = tags;
-    
     if (currentCats.length === 0 || currentTags.length === 0) {
       const { loadedCats, loadedTags } = await loadFormData();
       currentCats = loadedCats;
       currentTags = loadedTags;
     }
 
-    // 2. Find the category ID based on the post's categoryName
-    const matchedCategory = currentCats.find(c => c.name === post.categoryName);
+    const matchedCategory = currentCats.find((c) => c.name === post.categoryName);
     const categoryId = matchedCategory ? matchedCategory.id : '';
 
-    // 3. Find the tag IDs based on the post's tags
     const tagIds = [];
     if (post.tags) {
-      post.tags.forEach(postTag => {
+      post.tags.forEach((postTag) => {
         let tagName = '';
         if (typeof postTag === 'string') {
           const match = postTag.match(/name=([^,)]+)/);
           if (match && match[1]) tagName = match[1].trim();
+          else tagName = postTag;
         } else if (postTag && postTag.name) {
           tagName = postTag.name;
         }
-        
-        const matchedTag = currentTags.find(t => t.name === tagName);
+        const matchedTag = currentTags.find((t) => t.name === tagName);
         if (matchedTag) tagIds.push(matchedTag.id);
       });
     }
 
-    // 4. Populate form and open modal
     setFormData({
       title: post.title,
       content: post.content,
       categoryId: categoryId,
       tagIds: tagIds,
       status: post.status,
-      readingTime: post.readingTime
+      readingTime: post.readingTime,
     });
     setEditingPostId(post.id);
     setShowModal(true);
+    setActiveMenu(null);
   };
 
   const handleDeleteClick = async (id) => {
-    if (window.confirm("Are you sure you want to delete this post? This action cannot be undone.")) {
+    if (window.confirm('Delete this post? This cannot be undone.')) {
       try {
         await postService.deletePost(id);
-        // Refresh posts after successful deletion
         fetchPosts();
       } catch (err) {
-        setError(err.response?.data?.message || err.message || 'Failed to delete post');
+        setError(err.response?.data?.message || err.message || 'Failed to delete');
       }
     }
+    setActiveMenu(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormError('');
-
     if (formData.tagIds.length === 0) {
-      setFormError("Please select at least one tag.");
+      setFormError('Please select at least one tag.');
       return;
     }
-
     setIsSubmitting(true);
     try {
-      const payload = {
-        ...formData,
-        readingTime: parseInt(formData.readingTime, 10)
-      };
-      
-      // Determine if we are Updating or Creating based on editingPostId
+      const payload = { ...formData, readingTime: parseInt(formData.readingTime, 10) };
       if (editingPostId) {
         await postService.updatePost(editingPostId, payload);
       } else {
         await postService.createPost(payload);
       }
-      
-      // Success! Close modal, clear form, and refresh posts
       setShowModal(false);
       setEditingPostId(null);
       setFormData(initialFormState);
@@ -223,189 +167,275 @@ const Dashboard = () => {
 
   const openCreateModal = () => {
     setFormData(initialFormState);
-    setEditingPostId(null); // Ensure we are in "Create" mode
+    setEditingPostId(null);
     setFormError('');
     setShowModal(true);
   };
 
+  const getStatusColor = (status) => {
+    if (status === 'PUBLISHED') return 'bg-green-500/10 text-green-400 border-green-500/20';
+    return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
+  };
+
+  const parseTagName = (tag) => {
+    if (typeof tag === 'string') {
+      const match = tag.match(/name=([^,)]+)/);
+      return match && match[1] ? match[1].trim() : tag;
+    }
+    return tag?.name || tag;
+  };
+
   return (
-    <div className="w-full max-w-6xl mx-auto mt-8 px-6 pb-12">
-      
-      {/* --- HEADER --- */}
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
-            <LayoutDashboard className="text-blue-600" /> Dashboard
-          </h2>
-          <p className="text-gray-600 mt-2">Manage your Kothika blogs</p>
+    <div className="min-h-screen">
+      {/* Header */}
+      <div className="sticky top-0 z-40 bg-dark/80 backdrop-blur-xl border-b border-dark-400/50 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-dark-800">Dashboard</h1>
+            <p className="text-sm text-dark-600">Manage your posts</p>
+          </div>
         </div>
-        <button 
-          onClick={openCreateModal}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-sm"
-        >
-          <Plus size={20} /> New Post
-        </button>
       </div>
 
+      {/* Compose Box */}
+      <div className="border-b border-dark-400/50 p-4">
+        <div className="flex gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-brand to-purple-500 rounded-full flex items-center justify-center text-white font-bold shrink-0">
+            {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+          </div>
+          <div className="flex-1">
+            <button
+              onClick={openCreateModal}
+              className="w-full text-left text-dark-600 text-xl py-2 hover:text-dark-700 transition-colors"
+            >
+              What's on your mind?
+            </button>
+            <div className="flex justify-end pt-2 border-t border-dark-400/50 mt-3">
+              <button
+                onClick={openCreateModal}
+                className="btn-primary text-sm py-2 px-5 flex items-center gap-2"
+              >
+                <Feather size={16} />
+                New Post
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Error Banner */}
       {error && (
-        <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 border border-red-100 flex justify-between items-center">
+        <div className="mx-4 mt-4 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm flex justify-between items-center animate-slide-down">
           <span>{error}</span>
-          <button onClick={() => setError('')}><X size={16} /></button>
+          <button onClick={() => setError('')} className="hover:text-red-300">
+            <X size={16} />
+          </button>
         </div>
       )}
 
-      {/* --- DASHBOARD GRID --- */}
+      {/* Posts Feed */}
       {loading ? (
-        <div className="flex justify-center py-20">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="space-y-0">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="post-card animate-pulse-soft">
+              <div className="flex gap-3">
+                <div className="w-10 h-10 skeleton rounded-full shrink-0" />
+                <div className="flex-1 space-y-3">
+                  <div className="h-4 skeleton w-1/3" />
+                  <div className="h-4 skeleton w-full" />
+                  <div className="h-4 skeleton w-2/3" />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       ) : posts.length === 0 ? (
-        <div className="bg-white p-12 rounded-2xl border border-gray-100 text-center shadow-sm">
-          <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Plus size={32} />
+        <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
+          <div className="w-16 h-16 bg-brand/10 rounded-full flex items-center justify-center mb-4">
+            <Feather size={32} className="text-brand" />
           </div>
-          <h3 className="text-xl font-bold text-gray-800 mb-2">No posts yet</h3>
-          <p className="text-gray-500 mb-6">Create your first blog post to get started.</p>
-          <button 
-            onClick={openCreateModal}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium transition-colors"
-          >
-            Write a Post
+          <h3 className="text-xl font-bold text-dark-800 mb-2">No posts yet</h3>
+          <p className="text-dark-600 mb-6 max-w-sm">
+            Share your first thought with the world. Click the button to start writing.
+          </p>
+          <button onClick={openCreateModal} className="btn-primary">
+            Write your first post
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {posts.map((post) => (
-            <div key={post.id} className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col h-full group">
-              
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-2">
-                  <span className="bg-blue-50 text-blue-600 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                    {post.categoryName || 'Uncategorized'}
-                  </span>
-                  <span className={`text-xs font-semibold px-2 py-1 rounded-md ${post.status === 'PUBLISHED' ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
-                    {post.status}
-                  </span>
+        <div>
+          {posts.map((post, index) => (
+            <div key={post.id} className="post-card animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
+              <div className="flex gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-brand to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">
+                  {post.authorName?.charAt(0)?.toUpperCase() || 'U'}
                 </div>
-                
-                {/* ACTION BUTTONS (Edit & Delete) */}
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button 
-                    onClick={() => handleEditClick(post)} 
-                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                    title="Edit Post"
-                  >
-                    <Edit2 size={16} />
-                  </button>
-                  <button 
-                    onClick={() => handleDeleteClick(post.id)} 
-                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                    title="Delete Post"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-              
-              <h3 className="text-xl font-bold text-gray-800 mb-3 line-clamp-2">{post.title}</h3>
-              <p className="text-gray-600 mb-6 line-clamp-3 text-sm flex-grow">{post.content}</p>
-              
-              <div className="pt-4 border-t border-gray-50 flex flex-col gap-3">
-                <div className="flex items-center justify-between text-sm text-gray-500">
-                  <div className="flex items-center gap-1.5">
-                    <User size={16} />
-                    <span className="truncate max-w-[120px]">{post.authorName}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Clock size={16} />
-                    <span>{post.readingTime} min read</span>
-                  </div>
-                </div>
-                
-                {post.tags && post.tags.length > 0 && (
-                  <div className="flex items-center gap-2 overflow-x-auto pb-1 hide-scrollbar mt-2">
-                    <TagIcon size={14} className="text-gray-400 flex-shrink-0" />
-                    <div className="flex gap-2">
-                      {post.tags.map((tag, idx) => {
-                        let displayTag = tag;
-                        try {
-                          if (typeof tag === 'string') {
-                            const match = tag.match(/name=([^,)]+)/);
-                            if (match && match[1]) displayTag = match[1].trim();
-                          } else if (tag && tag.name) {
-                            displayTag = tag.name;
-                          }
-                        } catch (e) {}
-                        return (
-                          <span key={idx} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md whitespace-nowrap">
-                            #{displayTag}
-                          </span>
-                        );
-                      })}
+                <div className="flex-1 min-w-0">
+                  {/* Author & Meta */}
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-bold text-dark-800 text-[15px] truncate">
+                        {post.authorName}
+                      </span>
+                      <span className="text-dark-600 text-sm">·</span>
+                      <span className="text-dark-600 text-sm flex items-center gap-1 shrink-0">
+                        <Clock size={12} />
+                        {post.readingTime} min
+                      </span>
+                    </div>
+
+                    {/* More menu */}
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenu(activeMenu === post.id ? null : post.id);
+                        }}
+                        className="p-1.5 rounded-full hover:bg-brand/10 hover:text-brand transition-colors text-dark-600"
+                      >
+                        <MoreHorizontal size={18} />
+                      </button>
+                      {activeMenu === post.id && (
+                        <div className="absolute right-0 top-full mt-1 glass-card shadow-2xl overflow-hidden animate-scale-in z-30 w-40">
+                          <button
+                            onClick={() => handleEditClick(post)}
+                            className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-dark-200 transition-colors text-left text-sm"
+                          >
+                            <Edit2 size={14} />
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteClick(post.id)}
+                            className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-dark-200 transition-colors text-left text-sm text-red-400"
+                          >
+                            <Trash2 size={14} />
+                            Delete
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
-                )}
+
+                  {/* Category + Status badges */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="tag-pill">{post.categoryName || 'Uncategorized'}</span>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${getStatusColor(post.status)}`}>
+                      {post.status}
+                    </span>
+                  </div>
+
+                  {/* Title */}
+                  <h3 className="text-[15px] font-bold text-dark-800 mb-1 leading-snug">{post.title}</h3>
+
+                  {/* Content */}
+                  <p className="text-dark-700 text-[15px] leading-relaxed mb-3 line-clamp-3">{post.content}</p>
+
+                  {/* Tags */}
+                  {post.tags && post.tags.length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {post.tags.map((tag, idx) => (
+                        <span
+                          key={idx}
+                          className="text-xs text-brand hover:underline cursor-pointer"
+                        >
+                          #{parseTagName(tag)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* --- POST MODAL (CREATE/EDIT) --- */}
+      {/* Create/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl animate-in fade-in zoom-in duration-200">
-            
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-start justify-center pt-12 px-4">
+          <div className="glass-card w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl animate-scale-in">
             {/* Modal Header */}
-            <div className="flex justify-between items-center p-6 border-b border-gray-100">
-              <h3 className="text-2xl font-bold text-gray-800">
-                {editingPostId ? 'Edit Post' : 'Create New Post'}
+            <div className="flex justify-between items-center p-4 border-b border-dark-400/50">
+              <h3 className="text-lg font-bold text-dark-800">
+                {editingPostId ? 'Edit Post' : 'Create Post'}
               </h3>
-              <button 
+              <button
                 onClick={() => {
                   setShowModal(false);
                   setEditingPostId(null);
                 }}
-                className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors"
+                className="p-2 rounded-full hover:bg-dark-200 transition-colors text-dark-600"
               >
-                <X size={24} />
+                <X size={20} />
               </button>
             </div>
 
-            {/* Modal Body (Scrollable) */}
-            <div className="p-6 overflow-y-auto">
+            {/* Modal Body */}
+            <div className="p-4 overflow-y-auto flex-1 hide-scrollbar">
               {formError && (
-                <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-lg flex items-start gap-2 text-sm border border-red-100">
-                  <AlertCircle size={18} className="mt-0.5 flex-shrink-0" /> 
-                  <p>{formError}</p>
+                <div className="mb-4 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm flex items-start gap-2">
+                  <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                  <span>{formError}</span>
                 </div>
               )}
 
-              <form id="postForm" onSubmit={handleSubmit} className="space-y-6">
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* Title */}
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Title *</label>
-                    <input
-                      type="text"
-                      name="title"
+              <form id="postForm" onSubmit={handleSubmit} className="space-y-5">
+                {/* Title */}
+                <div>
+                  <label className="block text-sm font-medium text-dark-700 mb-2">Title *</label>
+                  <input
+                    type="text"
+                    name="title"
+                    required
+                    maxLength="25"
+                    placeholder="Give your post a title"
+                    className="input-dark"
+                    value={formData.title}
+                    onChange={handleInputChange}
+                  />
+                  <p className="text-xs text-dark-600 mt-1 text-right">{formData.title.length}/25</p>
+                </div>
+
+                {/* Content */}
+                <div>
+                  <label className="block text-sm font-medium text-dark-700 mb-2">Content *</label>
+                  <textarea
+                    name="content"
+                    required
+                    maxLength="500"
+                    rows="5"
+                    placeholder="What's happening?"
+                    className="input-dark resize-none"
+                    value={formData.content}
+                    onChange={handleInputChange}
+                  />
+                  <p className="text-xs text-dark-600 mt-1 text-right">{formData.content.length}/500</p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* Category */}
+                  <div>
+                    <label className="block text-sm font-medium text-dark-700 mb-2">Category *</label>
+                    <select
+                      name="categoryId"
                       required
-                      maxLength="25"
-                      placeholder="e.g. Future Tech 2026"
-                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                      value={formData.title}
+                      className="input-dark bg-dark-100"
+                      value={formData.categoryId}
                       onChange={handleInputChange}
-                    />
-                    <p className="text-xs text-gray-400 mt-1 text-right">{formData.title.length}/25</p>
+                    >
+                      <option value="" disabled>Select...</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Status */}
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Status *</label>
+                    <label className="block text-sm font-medium text-dark-700 mb-2">Status *</label>
                     <select
                       name="status"
-                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                      className="input-dark bg-dark-100"
                       value={formData.status}
                       onChange={handleInputChange}
                     >
@@ -413,115 +443,80 @@ const Dashboard = () => {
                       <option value="PUBLISHED">Published</option>
                     </select>
                   </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Category */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Category *</label>
-                    <select
-                      name="categoryId"
-                      required
-                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                      value={formData.categoryId}
-                      onChange={handleInputChange}
-                    >
-                      <option value="" disabled>Select a category...</option>
-                      {categories.map(cat => (
-                        <option key={cat.id} value={cat.id}>{cat.name}</option>
-                      ))}
-                    </select>
-                  </div>
 
                   {/* Reading Time */}
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Reading Time (mins) *</label>
+                    <label className="block text-sm font-medium text-dark-700 mb-2">Read time (min) *</label>
                     <input
                       type="number"
                       name="readingTime"
                       required
                       min="1"
                       placeholder="5"
-                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none"
+                      className="input-dark"
                       value={formData.readingTime}
                       onChange={handleInputChange}
                     />
                   </div>
                 </div>
 
-                {/* Content */}
+                {/* Tags */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Content *</label>
-                  <textarea
-                    name="content"
-                    required
-                    maxLength="500"
-                    rows="5"
-                    placeholder="Write your blog post content here..."
-                    className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                    value={formData.content}
-                    onChange={handleInputChange}
-                  ></textarea>
-                  <p className="text-xs text-gray-400 mt-1 text-right">{formData.content.length}/500</p>
-                </div>
-
-                {/* Tags (Multi-select Checkboxes) */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Tags (Select at least one) *</label>
-                  <div className="flex flex-wrap gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                  <label className="block text-sm font-medium text-dark-700 mb-2">Tags *</label>
+                  <div className="flex flex-wrap gap-2 p-3 bg-dark-200/50 rounded-xl border border-dark-400/50">
                     {tags.length === 0 ? (
-                      <p className="text-sm text-gray-500 italic">No tags available.</p>
+                      <p className="text-sm text-dark-600 italic">No tags available</p>
                     ) : (
-                      tags.map(tag => (
-                        <label 
-                          key={tag.id} 
-                          className={`flex items-center gap-2 px-3 py-1.5 rounded-full border cursor-pointer transition-colors text-sm
-                            ${formData.tagIds.includes(tag.id) ? 'bg-blue-100 border-blue-500 text-blue-700' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-100'}`}
+                      tags.map((tag) => (
+                        <button
+                          type="button"
+                          key={tag.id}
+                          onClick={() => handleTagToggle(tag.id)}
+                          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 border ${
+                            formData.tagIds.includes(tag.id)
+                              ? 'bg-brand/20 border-brand/50 text-brand'
+                              : 'bg-dark-300/50 border-dark-400/50 text-dark-700 hover:border-dark-500'
+                          }`}
                         >
-                          <input 
-                            type="checkbox" 
-                            className="hidden"
-                            checked={formData.tagIds.includes(tag.id)}
-                            onChange={() => handleTagToggle(tag.id)}
-                          />
                           #{tag.name}
-                        </label>
+                        </button>
                       ))
                     )}
                   </div>
                 </div>
-
               </form>
             </div>
 
             {/* Modal Footer */}
-            <div className="p-6 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex justify-end gap-3">
-              <button 
+            <div className="p-4 border-t border-dark-400/50 flex justify-end gap-3">
+              <button
                 type="button"
                 onClick={() => {
                   setShowModal(false);
                   setEditingPostId(null);
                 }}
-                className="px-5 py-2.5 text-gray-600 hover:bg-gray-200 font-medium rounded-lg transition-colors"
+                className="btn-outline text-sm py-2 px-5"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 form="postForm"
                 type="submit"
                 disabled={isSubmitting}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-70 flex items-center gap-2"
+                className="btn-primary text-sm py-2 px-6 flex items-center gap-2 disabled:opacity-60"
               >
-                {isSubmitting 
-                  ? (editingPostId ? 'Updating...' : 'Publishing...') 
-                  : (editingPostId ? 'Update Post' : 'Publish Post')}
+                {isSubmitting ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : editingPostId ? (
+                  'Update'
+                ) : (
+                  'Publish'
+                )}
               </button>
             </div>
-
           </div>
         </div>
       )}
-
     </div>
   );
 };

@@ -2,6 +2,7 @@ package com.sourav.kothika.security;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.UUID;
 
 import org.jspecify.annotations.Nullable;
 import org.springframework.security.core.GrantedAuthority;
@@ -32,6 +33,10 @@ public class CustomUserDetails implements UserDetails{
 	@Override
 	public String getUsername() {
 		return user.getEmail();
+	}
+	
+	public UUID getId() {
+		return user.getId();
 	}
 
 }

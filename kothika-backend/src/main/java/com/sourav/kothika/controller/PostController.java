@@ -58,4 +58,17 @@ public class PostController {
 		PostResponseDto updatedPost = postService.updatePost(id, postRequestDto);
 		return new ResponseEntity<PostResponseDto>(updatedPost, HttpStatus.OK);
 	}
+	
+	@GetMapping("/drafts")
+	public ResponseEntity<List<PostResponseDto>> fetchAllPublishedPosts(){
+		List<PostResponseDto> draftPosts = postService.getAllPublishedPostsOfUser();
+		return new ResponseEntity<List<PostResponseDto>>(draftPosts, HttpStatus.OK);
+	}
+	
+	@PostMapping("/published")
+	public ResponseEntity<List<PostResponseDto>> fetchAllDraftPosts(){
+		List<PostResponseDto> publishedPosts = postService.getAllDraftPostsOfUser();
+		return new ResponseEntity<List<PostResponseDto>>(publishedPosts, HttpStatus.OK);
+	}
+	
 }

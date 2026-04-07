@@ -10,6 +10,8 @@ public interface PostService {
 	
 	public PostResponseDto getPostById(UUID id);
 	public List<PostResponseDto> getAllPosts();
+	public List<PostResponseDto> getAllPublishedPostsOfUser();
+	public List<PostResponseDto> getAllDraftPostsOfUser();
 	public PostResponseDto createPost(PostRequestDto postRequestDto);
 	public String deletePost(UUID id);
 	public PostResponseDto updatePost(UUID id, PostRequestDto postRequestDto);

@@ -14,13 +14,16 @@ import com.sourav.kothika.domain.dto.PostRequestDto;
 import com.sourav.kothika.domain.dto.PostResponseDto;
 import com.sourav.kothika.domain.model.Category;
 import com.sourav.kothika.domain.model.Post;
+import com.sourav.kothika.domain.model.PostStatus;
 import com.sourav.kothika.domain.model.Tag;
 import com.sourav.kothika.domain.model.User;
 import com.sourav.kothika.repository.CategoryRepository;
 import com.sourav.kothika.repository.PostRepository;
 import com.sourav.kothika.repository.TagRepository;
 import com.sourav.kothika.repository.UserRepository;
+import com.sourav.kothika.security.CustomUserDetails;
 import com.sourav.kothika.service.PostService;
+import static com.sourav.kothika.domain.model.PostStatus.*;
 
 import lombok.RequiredArgsConstructor;
 
@@ -42,10 +45,34 @@ public class PostServiceImpl implements PostService{
 
 	@Override
 	public List<PostResponseDto> getAllPosts() {
-		List<Post> postList = postRepository.findAll();
+		List<Post> postList = postRepository.findByStatus(PUBLISHED);
 		return postList.stream()
 				.map(post -> modelMapper.map(post, PostResponseDto.class))
 				.toList();
+	}
+	
+	@Override
+	public List<PostResponseDto> getAllPublishedPostsOfUser(){
+		List<Post> publishedPosts = getAllPostByUserAndStatus(PUBLISHED);
+		return publishedPosts.stream()
+				.map(post -> modelMapper.map(post, PostResponseDto.class))
+				.toList();
+	}
+	
+	@Override
+	public List<PostResponseDto> getAllDraftPostsOfUser(){
+		List<Post> draftPosts = getAllPostByUserAndStatus(DRAFT);
+		return draftPosts.stream()
+				.map(post -> modelMapper.map(post, PostResponseDto.class))
+				.toList();
+	}
+	
+	public List<Post> getAllPostByUserAndStatus(PostStatus status){
+		Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+		UUID userId = ((CustomUserDetails) auth.getPrincipal()).getId();
+		
+		List<Post> posts = postRepository.findByAuthor_IdAndStatus(userId, status);
+		return posts;
 	}
 
 	@Override

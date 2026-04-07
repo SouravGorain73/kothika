@@ -1,5 +1,5 @@
 import React, { useState, useContext } from 'react';
-import { Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { authService } from '../api/authService';
 import { useNavigate, Link } from 'react-router-dom';
@@ -11,83 +11,104 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showPass, setShowPass] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
-
     try {
       const data = await authService.login(email, password);
       login(data.token);
-      navigate('/dashboard'); 
+      navigate('/dashboard');
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.message || err.message || 'Invalid email or password');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 border border-gray-100 mx-auto mt-20">
-      <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-gray-800">Welcome Back</h2>
-        <p className="text-gray-500 mt-2">Sign in to manage your Kothika blogs</p>
+    <div className="min-h-screen bg-dark flex items-center justify-center px-4">
+      <div className="w-full max-w-[420px] animate-fade-in">
+        {/* Logo */}
+        <div className="flex justify-center mb-8">
+          <div className="w-12 h-12 bg-brand rounded-xl flex items-center justify-center">
+            <span className="text-white font-black text-2xl">K</span>
+          </div>
+        </div>
+
+        <h1 className="text-3xl font-bold text-dark-800 text-center mb-2">
+          Sign in to Kothika
+        </h1>
+        <p className="text-dark-600 text-center mb-8">
+          Welcome back! Enter your credentials to continue.
+        </p>
+
+        {error && (
+          <div className="mb-6 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm animate-slide-down">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-dark-700 mb-2">Email</label>
+            <div className="relative">
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-dark-600" size={18} />
+              <input
+                type="email"
+                required
+                className="input-dark pl-11"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-dark-700 mb-2">Password</label>
+            <div className="relative">
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-dark-600" size={18} />
+              <input
+                type={showPass ? 'text' : 'password'}
+                required
+                className="input-dark pl-11 pr-11"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPass(!showPass)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-dark-600 hover:text-dark-800 transition-colors"
+              >
+                {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="btn-primary w-full py-3 text-[15px] flex justify-center items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isLoading ? (
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <>Sign In <ArrowRight size={18} /></>
+            )}
+          </button>
+        </form>
+
+        <p className="text-center text-sm text-dark-600 mt-8">
+          Don't have an account?{' '}
+          <Link to="/register" className="text-brand font-semibold hover:underline">
+            Create one
+          </Link>
+        </p>
       </div>
-
-      {error && (
-        <div className="mb-4 p-4 bg-red-50 text-red-600 rounded-lg flex items-center gap-2 text-sm">
-          <AlertCircle size={18} /> {error}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-          <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="email"
-              required
-              className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-          <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="password"
-              required
-              className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg flex justify-center items-center gap-2 disabled:opacity-70"
-        >
-          {isLoading ? 'Signing in...' : 'Sign In'}
-          {!isLoading && <ArrowRight size={18} />}
-        </button>
-      </form>
-
-      <p className="text-center text-sm text-gray-500 mt-6">
-        Don't have an account?{' '}
-        <Link to="/register" className="text-blue-600 font-semibold hover:underline">
-          Create one
-        </Link>
-      </p>
     </div>
   );
 };
