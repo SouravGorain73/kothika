@@ -3,6 +3,7 @@ package com.sourav.kothika.service;
 import java.util.List;
 import java.util.UUID;
 
+import com.sourav.kothika.domain.dto.UpdatePasswordRequest;
 import com.sourav.kothika.domain.dto.UserRequestDto;
 import com.sourav.kothika.domain.dto.UserResponseDto;
 
@@ -17,5 +18,9 @@ public interface UserService {
 	public void deleteUser(UUID id);
 	
 	public UserResponseDto updateUser(UUID id, UserRequestDto user);
+
+	public UserResponseDto updateProfile(UserRequestDto user);
+	
+	public void updatePassword(UpdatePasswordRequest request);
 	
 }

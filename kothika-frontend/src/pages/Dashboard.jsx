@@ -1,9 +1,27 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { Plus, Clock, User, Tag as TagIcon, X, AlertCircle, Edit2, Trash2, Feather, MoreHorizontal } from 'lucide-react';
+import { Plus, Clock, User, Tag as TagIcon, X, AlertCircle, Edit2, Trash2, Feather, MoreHorizontal, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { postService } from '../api/postService';
 import { categoryService } from '../api/categoryService';
 import { tagService } from '../api/tagService';
+import { aiService } from '../api/aiService';
+import { mediaService } from '../api/mediaService';
 import { AuthContext } from '../context/AuthContext';
+
+const formatTimeAgo = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now - date) / 1000);
+  
+  if (diffInSeconds < 60) return `Just now`;
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
+  if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `${diffInHours}h ago`;
+  const diffInDays = Math.floor(diffInHours / 24);
+  if (diffInDays < 7) return `${diffInDays}d ago`;
+  return date.toLocaleDateString();
+};
 
 const Dashboard = () => {
   const { user } = useContext(AuthContext);
@@ -16,6 +34,8 @@ const Dashboard = () => {
   const [categories, setCategories] = useState([]);
   const [tags, setTags] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isAiLoading, setIsAiLoading] = useState(false);
   const [formError, setFormError] = useState('');
   const [activeMenu, setActiveMenu] = useState(null);
 
@@ -25,7 +45,8 @@ const Dashboard = () => {
     categoryId: '',
     tagIds: [],
     status: 'DRAFT',
-    readingTime: '',
+    readingTime: 5,
+    mediaAttachments: []
   };
   const [formData, setFormData] = useState(initialFormState);
 
@@ -86,6 +107,70 @@ const Dashboard = () => {
     }));
   };
 
+  const handleFileUpload = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+          setIsUploading(true);
+          const res = await mediaService.uploadMedia(file);
+          const newMediaUrl = res.data;
+          // We assume localhost:8080 since UI often runs on diff port in development
+          const fullUrl = newMediaUrl.startsWith('http') ? newMediaUrl : `http://localhost:8080${newMediaUrl}`;
+          setFormData(prev => ({
+              ...prev,
+              mediaAttachments: [...(prev.mediaAttachments || []), { url: fullUrl, type: 'IMAGE' }]
+          }));
+      } catch (err) {
+          setFormError('Failed to upload file');
+      } finally {
+          setIsUploading(false);
+      }
+  };
+
+  const handleGenerateTitle = async () => {
+      if (!formData.content) { setFormError('Need content to suggest title'); return; }
+      try {
+          setIsAiLoading(true);
+          const res = await aiService.suggestImprovements('Generate only a short, catchy blog title (max 25 characters) for the following content. Output ONLY the title text, with no quotes or extra characters: ' + formData.content);
+          let generated = res.data.result.trim().replace(/^"|"$/g, '');
+          if(generated.length > 25) generated = generated.substring(0, 25);
+          setFormData(p => ({...p, title: generated}));
+      } catch (err) {
+          setFormError('AI Error: ' + err.message);
+      } finally {
+          setIsAiLoading(false);
+      }
+  };
+
+  const handleGenerateContent = async () => {
+      const topic = prompt("Enter a topic for the AI to write about:");
+      if (!topic) return;
+      try {
+          setIsAiLoading(true);
+          const res = await aiService.generatePost(topic);
+          let generated = res.data.result.trim();
+          if(generated.length > 500) generated = generated.substring(0, 500); // Enforce schema limit
+          setFormData(p => ({...p, content: generated}));
+      } catch(err) {
+          setFormError('AI Error: ' + err.message);
+      } finally {
+          setIsAiLoading(false);
+      }
+  };
+
+  const handleSummarize = async () => {
+      if(!formData.content) { setFormError('Need content to summarize'); return; }
+      try {
+          setIsAiLoading(true);
+          const res = await aiService.summarize(formData.content);
+          alert("AI Summary:\n" + res.data.result);
+      } catch (err) {
+          setFormError('AI Error: ' + err.message);
+      } finally {
+          setIsAiLoading(false);
+      }
+  };
+
   const handleEditClick = async (post) => {
     let currentCats = categories;
     let currentTags = tags;
@@ -120,7 +205,8 @@ const Dashboard = () => {
       categoryId: categoryId,
       tagIds: tagIds,
       status: post.status,
-      readingTime: post.readingTime,
+      readingTime: post.readingTime || 5, // Fallback if old code uses missing readingTime
+      mediaAttachments: post.mediaAttachments || []
     });
     setEditingPostId(post.id);
     setShowModal(true);
@@ -148,7 +234,7 @@ const Dashboard = () => {
     }
     setIsSubmitting(true);
     try {
-      const payload = { ...formData, readingTime: parseInt(formData.readingTime, 10) };
+      const payload = { ...formData, readingTime: parseInt(formData.readingTime, 10) || 5 };
       if (editingPostId) {
         await postService.updatePost(editingPostId, payload);
       } else {
@@ -241,7 +327,7 @@ const Dashboard = () => {
               <div className="flex gap-3">
                 <div className="w-10 h-10 skeleton rounded-full shrink-0" />
                 <div className="flex-1 space-y-3">
-                  <div className="h-4 skeleton w-1/3" />
+                   <div className="h-4 skeleton w-1/3" />
                   <div className="h-4 skeleton w-full" />
                   <div className="h-4 skeleton w-2/3" />
                 </div>
@@ -264,89 +350,105 @@ const Dashboard = () => {
         </div>
       ) : (
         <div>
-          {posts.map((post, index) => (
-            <div key={post.id} className="post-card animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
-              <div className="flex gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-brand to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">
-                  {post.authorName?.charAt(0)?.toUpperCase() || 'U'}
-                </div>
-                <div className="flex-1 min-w-0">
-                  {/* Author & Meta */}
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="font-bold text-dark-800 text-[15px] truncate">
-                        {post.authorName}
-                      </span>
-                      <span className="text-dark-600 text-sm">·</span>
-                      <span className="text-dark-600 text-sm flex items-center gap-1 shrink-0">
-                        <Clock size={12} />
-                        {post.readingTime} min
-                      </span>
-                    </div>
+          {posts.map((post, index) => {
+              // Ownership check
+              const isOwner = (post.authorId && user?.id === post.authorId) || (post.authorName && post.authorName === user?.name);
 
-                    {/* More menu */}
-                    <div className="relative">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveMenu(activeMenu === post.id ? null : post.id);
-                        }}
-                        className="p-1.5 rounded-full hover:bg-brand/10 hover:text-brand transition-colors text-dark-600"
-                      >
-                        <MoreHorizontal size={18} />
-                      </button>
-                      {activeMenu === post.id && (
-                        <div className="absolute right-0 top-full mt-1 glass-card shadow-2xl overflow-hidden animate-scale-in z-30 w-40">
+              return (
+              <div key={post.id} className="post-card animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
+                <div className="flex gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-brand to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">
+                    {post.authorName?.charAt(0)?.toUpperCase() || 'U'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    {/* Author & Meta */}
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-bold text-dark-800 text-[15px] truncate">
+                          {post.authorName}
+                        </span>
+                        <span className="text-dark-600 text-sm">·</span>
+                        <span className="text-dark-600 text-sm flex items-center gap-1 shrink-0" title={new Date(post.createdAt).toLocaleString()}>
+                          <Clock size={12} />
+                          {formatTimeAgo(post.createdAt || post.updatedAt || new Date().toISOString())}
+                        </span>
+                      </div>
+
+                      {/* More menu - ONLY IF OWNER */}
+                      {isOwner && (
+                        <div className="relative">
                           <button
-                            onClick={() => handleEditClick(post)}
-                            className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-dark-200 transition-colors text-left text-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMenu(activeMenu === post.id ? null : post.id);
+                            }}
+                            className="p-1.5 rounded-full hover:bg-brand/10 hover:text-brand transition-colors text-dark-600"
                           >
-                            <Edit2 size={14} />
-                            Edit
+                            <MoreHorizontal size={18} />
                           </button>
-                          <button
-                            onClick={() => handleDeleteClick(post.id)}
-                            className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-dark-200 transition-colors text-left text-sm text-red-400"
-                          >
-                            <Trash2 size={14} />
-                            Delete
-                          </button>
+                          {activeMenu === post.id && (
+                            <div className="absolute right-0 top-full mt-1 glass-card shadow-2xl overflow-hidden animate-scale-in z-30 w-40">
+                              <button
+                                onClick={() => handleEditClick(post)}
+                                className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-dark-200 transition-colors text-left text-sm"
+                              >
+                                <Edit2 size={14} />
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteClick(post.id)}
+                                className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-dark-200 transition-colors text-left text-sm text-red-400"
+                              >
+                                <Trash2 size={14} />
+                                Delete
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  </div>
 
-                  {/* Category + Status badges */}
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="tag-pill">{post.categoryName || 'Uncategorized'}</span>
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${getStatusColor(post.status)}`}>
-                      {post.status}
-                    </span>
-                  </div>
-
-                  {/* Title */}
-                  <h3 className="text-[15px] font-bold text-dark-800 mb-1 leading-snug">{post.title}</h3>
-
-                  {/* Content */}
-                  <p className="text-dark-700 text-[15px] leading-relaxed mb-3 line-clamp-3">{post.content}</p>
-
-                  {/* Tags */}
-                  {post.tags && post.tags.length > 0 && (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {post.tags.map((tag, idx) => (
-                        <span
-                          key={idx}
-                          className="text-xs text-brand hover:underline cursor-pointer"
-                        >
-                          #{parseTagName(tag)}
-                        </span>
-                      ))}
+                    {/* Category + Status badges */}
+                    <div className="flex items-center gap-2 mb-2">
+                       <span className="tag-pill">{post.categoryName || 'Uncategorized'}</span>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${getStatusColor(post.status)}`}>
+                        {post.status}
+                      </span>
                     </div>
-                  )}
+
+                    {/* Title */}
+                    <h3 className="text-[15px] font-bold text-dark-800 mb-1 leading-snug">{post.title}</h3>
+
+                    {/* Content */}
+                    <p className="text-dark-700 text-[15px] leading-relaxed mb-3 line-clamp-3">{post.content}</p>
+                    
+                    {/* Media Attachments */}
+                    {post.mediaAttachments && post.mediaAttachments.length > 0 && (
+                        <div className="mt-3 mb-3 max-w-full overflow-hidden rounded-xl border border-dark-400/50">
+                            {post.mediaAttachments.map((media, mIdx) => (
+                                <img key={mIdx} src={media.url} alt="Post Attachment" className="w-full h-auto object-cover max-h-96" />
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Tags */}
+                    {post.tags && post.tags.length > 0 && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {post.tags.map((tag, idx) => (
+                           <span
+                             key={idx}
+                            className="text-xs text-brand hover:underline cursor-pointer"
+                           >
+                            #{parseTagName(tag)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -354,27 +456,32 @@ const Dashboard = () => {
       {showModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-start justify-center pt-12 px-4">
           <div className="glass-card w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl animate-scale-in">
-            {/* Modal Header */}
-            <div className="flex justify-between items-center p-4 border-b border-dark-400/50">
+             {/* Modal Header */}
+             <div className="flex justify-between items-center p-4 border-b border-dark-400/50">
               <h3 className="text-lg font-bold text-dark-800">
                 {editingPostId ? 'Edit Post' : 'Create Post'}
               </h3>
-              <button
-                onClick={() => {
-                  setShowModal(false);
-                  setEditingPostId(null);
-                }}
-                className="p-2 rounded-full hover:bg-dark-200 transition-colors text-dark-600"
-              >
-                <X size={20} />
-              </button>
+              <div className="flex gap-2.5 items-center">
+                  <button onClick={handleGenerateContent} disabled={isAiLoading} className="flex gap-1.5 items-center text-xs px-3 py-1.5 bg-brand/10 text-brand rounded-full hover:bg-brand/20 transition-colors">
+                     <Sparkles size={14}/> {isAiLoading ? 'Wait...' : 'AI Generate'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowModal(false);
+                      setEditingPostId(null);
+                    }}
+                    className="p-2 rounded-full hover:bg-dark-200 transition-colors text-dark-600"
+                  >
+                    <X size={20} />
+                  </button>
+              </div>
             </div>
 
             {/* Modal Body */}
             <div className="p-4 overflow-y-auto flex-1 hide-scrollbar">
               {formError && (
                 <div className="mb-4 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm flex items-start gap-2">
-                  <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                   <AlertCircle size={16} className="mt-0.5 shrink-0" />
                   <span>{formError}</span>
                 </div>
               )}
@@ -382,7 +489,12 @@ const Dashboard = () => {
               <form id="postForm" onSubmit={handleSubmit} className="space-y-5">
                 {/* Title */}
                 <div>
-                  <label className="block text-sm font-medium text-dark-700 mb-2">Title *</label>
+                   <div className="flex justify-between items-end mb-2">
+                      <label className="block text-sm font-medium text-dark-700">Title *</label>
+                      <button type="button" onClick={handleGenerateTitle} disabled={isAiLoading || !formData.content} className="text-xs text-brand hover:underline flex items-center gap-1">
+                          <Sparkles size={12}/> AI Suggest Title
+                      </button>
+                   </div>
                   <input
                     type="text"
                     name="title"
@@ -398,7 +510,12 @@ const Dashboard = () => {
 
                 {/* Content */}
                 <div>
-                  <label className="block text-sm font-medium text-dark-700 mb-2">Content *</label>
+                  <div className="flex justify-between items-end mb-2">
+                      <label className="block text-sm font-medium text-dark-700">Content *</label>
+                      <button type="button" onClick={handleSummarize} disabled={isAiLoading || !formData.content} className="text-xs text-brand hover:underline flex items-center gap-1">
+                          <Sparkles size={12}/> AI Summarize
+                      </button>
+                   </div>
                   <textarea
                     name="content"
                     required
@@ -412,7 +529,32 @@ const Dashboard = () => {
                   <p className="text-xs text-dark-600 mt-1 text-right">{formData.content.length}/500</p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* Media Link/Upload */}
+                <div>
+                   <label className="block text-sm font-medium text-dark-700 mb-2">Attach Media (Optional)</label>
+                   <div className="flex gap-2">
+                        <label className="flex-1 cursor-pointer flex items-center gap-2 justify-center px-4 py-2 border border-dashed border-dark-400/50 rounded-xl hover:border-brand/50 transition-colors text-dark-600 text-sm">
+                            {isUploading ? <div className="w-4 h-4 border-2 border-brand border-t-transparent rounded-full animate-spin"/> : <ImageIcon size={18}/>}
+                            {isUploading ? 'Uploading...' : 'Upload Image'}
+                            <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} disabled={isUploading}/>
+                        </label>
+                   </div>
+                   {/* Preview attached media */}
+                   {formData.mediaAttachments && formData.mediaAttachments.length > 0 && (
+                       <div className="mt-3 flex gap-2 flex-wrap">
+                           {formData.mediaAttachments.map((m, i) => (
+                               <div key={i} className="relative group">
+                                   <img src={m.url} alt="Preview" className="w-20 h-20 object-cover rounded-xl border border-dark-400/50" />
+                                   <button type="button" onClick={() => setFormData(p => ({...p, mediaAttachments: p.mediaAttachments.filter((_, idx)=>idx!==i)}))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                       <X size={12}/>
+                                   </button>
+                               </div>
+                           ))}
+                       </div>
+                   )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Category */}
                   <div>
                     <label className="block text-sm font-medium text-dark-700 mb-2">Category *</label>
@@ -423,7 +565,7 @@ const Dashboard = () => {
                       value={formData.categoryId}
                       onChange={handleInputChange}
                     >
-                      <option value="" disabled>Select...</option>
+                       <option value="" disabled>Select...</option>
                       {categories.map((cat) => (
                         <option key={cat.id} value={cat.id}>{cat.name}</option>
                       ))}
@@ -443,29 +585,14 @@ const Dashboard = () => {
                       <option value="PUBLISHED">Published</option>
                     </select>
                   </div>
-
-                  {/* Reading Time */}
-                  <div>
-                    <label className="block text-sm font-medium text-dark-700 mb-2">Read time (min) *</label>
-                    <input
-                      type="number"
-                      name="readingTime"
-                      required
-                      min="1"
-                      placeholder="5"
-                      className="input-dark"
-                      value={formData.readingTime}
-                      onChange={handleInputChange}
-                    />
-                  </div>
                 </div>
 
                 {/* Tags */}
                 <div>
-                  <label className="block text-sm font-medium text-dark-700 mb-2">Tags *</label>
+                   <label className="block text-sm font-medium text-dark-700 mb-2">Tags *</label>
                   <div className="flex flex-wrap gap-2 p-3 bg-dark-200/50 rounded-xl border border-dark-400/50">
                     {tags.length === 0 ? (
-                      <p className="text-sm text-dark-600 italic">No tags available</p>
+                       <p className="text-sm text-dark-600 italic">No tags available</p>
                     ) : (
                       tags.map((tag) => (
                         <button
@@ -473,12 +600,12 @@ const Dashboard = () => {
                           key={tag.id}
                           onClick={() => handleTagToggle(tag.id)}
                           className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 border ${
-                            formData.tagIds.includes(tag.id)
+                             formData.tagIds.includes(tag.id)
                               ? 'bg-brand/20 border-brand/50 text-brand'
                               : 'bg-dark-300/50 border-dark-400/50 text-dark-700 hover:border-dark-500'
                           }`}
                         >
-                          #{tag.name}
+                           #{tag.name}
                         </button>
                       ))
                     )}
@@ -487,7 +614,7 @@ const Dashboard = () => {
               </form>
             </div>
 
-            {/* Modal Footer */}
+             {/* Modal Footer */}
             <div className="p-4 border-t border-dark-400/50 flex justify-end gap-3">
               <button
                 type="button"
@@ -496,21 +623,21 @@ const Dashboard = () => {
                   setEditingPostId(null);
                 }}
                 className="btn-outline text-sm py-2 px-5"
-              >
+               >
                 Cancel
               </button>
-              <button
+               <button
                 form="postForm"
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || isUploading || isAiLoading}
                 className="btn-primary text-sm py-2 px-6 flex items-center gap-2 disabled:opacity-60"
               >
-                {isSubmitting ? (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                {(isSubmitting || isUploading || isAiLoading) ? (
+                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 ) : editingPostId ? (
-                  'Update'
+                   'Update'
                 ) : (
-                  'Publish'
+                   'Publish'
                 )}
               </button>
             </div>

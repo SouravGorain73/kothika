@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useContext } from 'react';
-import { Settings as SettingsIcon, User, Mail, Hash, Shield, LogOut } from 'lucide-react';
+import { Settings as SettingsIcon, User, Mail, Hash, Shield, LogOut, Edit2, X, AlertCircle, Check } from 'lucide-react';
 import { userService } from '../api/userService';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -10,18 +10,70 @@ const Settings = () => {
   const [user, setUser] = useState(contextUser);
   const [loading, setLoading] = useState(!contextUser);
 
+  const [activeTab, setActiveTab] = useState('profile'); // 'profile' or 'security'
+  
+  // Profile Form
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({ name: '', email: '' });
+  const [profileMsg, setProfileMsg] = useState('');
+  
+  // Password Form
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [passwordMsg, setPasswordMsg] = useState('');
+  const [pwdError, setPwdError] = useState('');
+
   useEffect(() => {
     if (!contextUser) {
       userService.getCurrentUser()
-        .then((res) => setUser(res.data))
+        .then((res) => {
+            setUser(res.data);
+            setProfileForm({ name: res.data.name, email: res.data.email });
+        })
         .catch((err) => console.error('Failed to load user:', err))
         .finally(() => setLoading(false));
+    } else {
+        setProfileForm({ name: contextUser.name, email: contextUser.email });
     }
   }, [contextUser]);
 
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const handleProfileSubmit = async (e) => {
+      e.preventDefault();
+      try {
+          const res = await userService.updateProfile(profileForm);
+          setUser(res.data);
+          setIsEditingProfile(false);
+          setProfileMsg('Profile updated successfully!');
+          setTimeout(() => setProfileMsg(''), 3000);
+      } catch (err) {
+          console.error(err);
+          alert('Failed to update profile.');
+      }
+  };
+
+  const handlePasswordSubmit = async (e) => {
+      e.preventDefault();
+      setPwdError('');
+      setPasswordMsg('');
+      if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+          setPwdError('New passwords do not match!');
+          return;
+      }
+      try {
+          await userService.updatePassword({ 
+              currentPassword: passwordForm.currentPassword, 
+              newPassword: passwordForm.newPassword 
+          });
+          setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+          setPasswordMsg('Password updated successfully!');
+          setTimeout(() => setPasswordMsg(''), 3000);
+      } catch (err) {
+          setPwdError(err.response?.data?.message || 'Failed to update password.');
+      }
   };
 
   if (loading) {
@@ -43,13 +95,13 @@ const Settings = () => {
       {/* Header */}
       <div className="sticky top-0 z-40 bg-dark/80 backdrop-blur-xl border-b border-dark-400/50 px-4 py-3">
         <h1 className="text-xl font-bold text-dark-800">Settings</h1>
-        <p className="text-sm text-dark-600">Manage your account</p>
+        <p className="text-sm text-dark-600">Manage your account and privacy</p>
       </div>
 
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-4 max-w-3xl mx-auto">
         {/* Profile Card */}
         <div className="glass-card p-6">
-          <div className="flex items-center gap-4 mb-6">
+          <div className="flex items-center gap-4">
             <div className="w-16 h-16 bg-gradient-to-br from-brand to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-2xl shrink-0">
               {user?.name?.charAt(0)?.toUpperCase() || 'U'}
             </div>
@@ -58,40 +110,122 @@ const Settings = () => {
               <p className="text-dark-600 text-sm">{user?.email || 'email@example.com'}</p>
             </div>
           </div>
-
-          {/* Info Grid */}
-          <div className="space-y-4">
-            <InfoRow icon={User} label="Display Name" value={user?.name} />
-            <InfoRow icon={Mail} label="Email Address" value={user?.email} />
-            <InfoRow icon={Hash} label="User ID" value={user?.id} mono />
-          </div>
         </div>
 
-        {/* Account Section */}
-        <div className="glass-card overflow-hidden">
-          <h3 className="text-[15px] font-bold text-dark-800 px-4 pt-4 pb-2">Account</h3>
+        {/* Tabs */}
+        <div className="flex gap-4 border-b border-dark-400/50 mb-4 px-2">
+            <button 
+                onClick={() => setActiveTab('profile')}
+                className={`py-2 px-1 border-b-2 transition-colors ${activeTab === 'profile' ? 'border-brand text-brand font-bold' : 'border-transparent text-dark-600 hover:text-dark-800'}`}
+            >
+                Edit Profile
+            </button>
+            <button 
+                onClick={() => setActiveTab('security')}
+                className={`py-2 px-1 border-b-2 transition-colors ${activeTab === 'security' ? 'border-brand text-brand font-bold' : 'border-transparent text-dark-600 hover:text-dark-800'}`}
+            >
+                Security & Password
+            </button>
+        </div>
 
-          <button className="flex items-center gap-3 w-full px-4 py-3 hover:bg-dark-200 transition-colors text-left">
-            <Shield size={18} className="text-dark-600" />
-            <div>
-              <p className="text-[15px] text-dark-800">Security & Privacy</p>
-              <p className="text-xs text-dark-600">Manage your password and privacy settings</p>
-            </div>
-          </button>
+        {/* Tab Contents */}
+        <div className="glass-card p-6">
+            {activeTab === 'profile' && (
+                <div>
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-bold text-dark-800">Personal Information</h3>
+                        {!isEditingProfile && (
+                            <button onClick={() => setIsEditingProfile(true)} className="flex items-center gap-1 text-sm text-brand hover:underline">
+                                <Edit2 size={14} /> Edit
+                            </button>
+                        )}
+                    </div>
+                    {profileMsg && <div className="text-green-500 text-sm mb-4 flex items-center gap-1"><Check size={16}/> {profileMsg}</div>}
+                    
+                    {isEditingProfile ? (
+                        <form onSubmit={handleProfileSubmit} className="space-y-4 animate-fade-in">
+                            <div>
+                                <label className="block text-sm font-medium text-dark-700 mb-1">Display Name</label>
+                                <input 
+                                    type="text" 
+                                    value={profileForm.name} 
+                                    onChange={(e) => setProfileForm({...profileForm, name: e.target.value})}
+                                    className="input-dark bg-dark-100" 
+                                    required 
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-dark-700 mb-1">Email Address</label>
+                                <input 
+                                    type="email" 
+                                    value={profileForm.email} 
+                                    onChange={(e) => setProfileForm({...profileForm, email: e.target.value})}
+                                    className="input-dark bg-dark-100" 
+                                    required 
+                                />
+                            </div>
+                            <div className="flex gap-2 justify-end pt-2">
+                                <button type="button" onClick={() => setIsEditingProfile(false)} className="btn-outline text-sm px-4 py-1.5">Cancel</button>
+                                <button type="submit" className="btn-primary text-sm px-4 py-1.5">Save Changes</button>
+                            </div>
+                        </form>
+                    ) : (
+                        <div className="space-y-4">
+                            <InfoRow icon={User} label="Display Name" value={user?.name} />
+                            <InfoRow icon={Mail} label="Email Address" value={user?.email} />
+                            <InfoRow icon={Hash} label="User ID" value={user?.id} mono />
+                        </div>
+                    )}
+                </div>
+            )}
 
-          <div className="border-t border-dark-400/50" />
-
-          <button className="flex items-center gap-3 w-full px-4 py-3 hover:bg-dark-200 transition-colors text-left">
-            <SettingsIcon size={18} className="text-dark-600" />
-            <div>
-              <p className="text-[15px] text-dark-800">Preferences</p>
-              <p className="text-xs text-dark-600">Notifications, display, and language</p>
-            </div>
-          </button>
+            {activeTab === 'security' && (
+                <div>
+                    <h3 className="text-lg font-bold text-dark-800 mb-4 flex items-center gap-2"><Shield size={18}/> Update Password</h3>
+                    {passwordMsg && <div className="text-green-500 text-sm mb-4 flex items-center gap-1"><Check size={16}/> {passwordMsg}</div>}
+                    {pwdError && <div className="text-red-400 text-sm mb-4 flex items-center gap-1"><AlertCircle size={16}/> {pwdError}</div>}
+                    
+                    <form onSubmit={handlePasswordSubmit} className="space-y-4 max-w-md animate-fade-in">
+                        <div>
+                            <label className="block text-sm font-medium text-dark-700 mb-1">Current Password</label>
+                            <input 
+                                type="password" 
+                                value={passwordForm.currentPassword} 
+                                onChange={(e) => setPasswordForm({...passwordForm, currentPassword: e.target.value})}
+                                className="input-dark bg-dark-100" 
+                                required 
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-dark-700 mb-1">New Password</label>
+                            <input 
+                                type="password" 
+                                value={passwordForm.newPassword} 
+                                onChange={(e) => setPasswordForm({...passwordForm, newPassword: e.target.value})}
+                                className="input-dark bg-dark-100" 
+                                required 
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-dark-700 mb-1">Confirm New Password</label>
+                            <input 
+                                type="password" 
+                                value={passwordForm.confirmPassword} 
+                                onChange={(e) => setPasswordForm({...passwordForm, confirmPassword: e.target.value})}
+                                className="input-dark bg-dark-100" 
+                                required 
+                            />
+                        </div>
+                        <div className="pt-2">
+                            <button type="submit" className="btn-primary text-sm w-full py-2">Update Password</button>
+                        </div>
+                    </form>
+                </div>
+            )}
         </div>
 
         {/* Danger Zone */}
-        <div className="glass-card overflow-hidden border-red-500/20">
+        <div className="glass-card overflow-hidden border-red-500/20 mt-8">
           <h3 className="text-[15px] font-bold text-dark-800 px-4 pt-4 pb-2">Danger Zone</h3>
 
           <button
@@ -99,13 +233,8 @@ const Settings = () => {
             className="flex items-center gap-3 w-full px-4 py-3 hover:bg-red-500/10 transition-colors text-left text-red-400"
           >
             <LogOut size={18} />
-            <span className="text-[15px]">Log out</span>
+            <span className="text-[15px]">Log out from device</span>
           </button>
-        </div>
-
-        {/* App Info */}
-        <div className="text-center py-4">
-          <p className="text-xs text-dark-600">Kothika v1.0.0 · © 2026</p>
         </div>
       </div>
     </div>

@@ -38,6 +38,7 @@ public class SecurityConfig {
 				.requestMatchers(HttpMethod.GET, "/kothika/categories/**").permitAll()
 				.requestMatchers(HttpMethod.GET, "/kothika/posts/**").permitAll()
 				.requestMatchers(HttpMethod.GET, "/kothika/tags/**").permitAll()
+				.requestMatchers("/kothika/media/**").permitAll()
 				.requestMatchers("/kothika/users/me/**").authenticated()	
 				.anyRequest().authenticated()
 				)

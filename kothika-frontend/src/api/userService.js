@@ -7,4 +7,6 @@ export const userService = {
   addUser: (userData) => api.post("/kothika/users/add", userData),
   updateUser: (id, userData) => api.put(`/kothika/users/update/${id}`, userData),
   deleteUser: (id) => api.delete(`/kothika/users/delete/${id}`),
+  updateProfile: (userData) => api.put("/kothika/users/update-profile", userData),
+  updatePassword: (passwordData) => api.put("/kothika/users/update-password", passwordData),
 };

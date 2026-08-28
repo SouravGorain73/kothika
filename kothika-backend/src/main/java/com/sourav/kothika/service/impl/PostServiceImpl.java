@@ -4,6 +4,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.ArrayList;
 
 import org.modelmapper.ModelMapper;
 import org.springframework.security.core.Authentication;
@@ -13,6 +15,7 @@ import org.springframework.stereotype.Service;
 import com.sourav.kothika.domain.dto.PostRequestDto;
 import com.sourav.kothika.domain.dto.PostResponseDto;
 import com.sourav.kothika.domain.model.Category;
+import com.sourav.kothika.domain.model.MediaAttachment;
 import com.sourav.kothika.domain.model.Post;
 import com.sourav.kothika.domain.model.PostStatus;
 import com.sourav.kothika.domain.model.Tag;
@@ -98,10 +101,23 @@ public class PostServiceImpl implements PostService{
 		post.setContent(postRequestDto.getContent());
 		post.setReadingTime(postRequestDto.getReadingTime());
 		post.setStatus(postRequestDto.getStatus());
+
+		if (postRequestDto.getMediaAttachments() != null) {
+			List<MediaAttachment> mediaList = postRequestDto.getMediaAttachments().stream().map(mfa -> {
+				MediaAttachment attachment = new MediaAttachment();
+				attachment.setUrl(mfa.getUrl());
+				attachment.setType(mfa.getType());
+				attachment.setPost(post);
+				return attachment;
+			}).collect(Collectors.toList());
+			post.setMediaAttachments(mediaList);
+		}
 		
 		Post newSavedPost = postRepository.save(post);
 		
-		return modelMapper.map(newSavedPost, PostResponseDto.class);
+		PostResponseDto responseDto = modelMapper.map(newSavedPost, PostResponseDto.class);
+		responseDto.setAuthorId(user.getId());
+		return responseDto;
 	}
 
 	@Override
@@ -144,8 +160,27 @@ public class PostServiceImpl implements PostService{
 		oldPost.setCategory(category);
 		oldPost.setTags(tags);
 		
+		if (oldPost.getMediaAttachments() != null) {
+			oldPost.getMediaAttachments().clear();
+		} else {
+			oldPost.setMediaAttachments(new ArrayList<>());
+		}
+		
+		if (postRequestDto.getMediaAttachments() != null) {
+			List<MediaAttachment> mediaList = postRequestDto.getMediaAttachments().stream().map(mfa -> {
+				MediaAttachment attachment = new MediaAttachment();
+				attachment.setUrl(mfa.getUrl());
+				attachment.setType(mfa.getType());
+				attachment.setPost(oldPost);
+				return attachment;
+			}).collect(Collectors.toList());
+			oldPost.getMediaAttachments().addAll(mediaList);
+		}
+
 		Post updatedPost = postRepository.save(oldPost);
-		return modelMapper.map(updatedPost, PostResponseDto.class);
+		PostResponseDto responseDto = modelMapper.map(updatedPost, PostResponseDto.class);
+		responseDto.setAuthorId(user.getId());
+		return responseDto;
 	}
 
 }

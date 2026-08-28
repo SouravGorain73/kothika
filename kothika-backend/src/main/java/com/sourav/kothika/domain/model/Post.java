@@ -74,4 +74,6 @@ public class Post {
 	@UpdateTimestamp
 	private LocalDateTime updatedAt;
 
+	@jakarta.persistence.OneToMany(mappedBy = "post", cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
+	private java.util.List<MediaAttachment> mediaAttachments;
 }

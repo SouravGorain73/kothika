@@ -76,4 +76,16 @@ public class UserController{
 		UserResponseDto updatedUser = userService.updateUser(id, user);
 		return new ResponseEntity<UserResponseDto>(updatedUser, HttpStatus.CREATED);
 	}
+
+	@PutMapping("/update-profile")
+	ResponseEntity<UserResponseDto> updateProfile(@RequestBody UserRequestDto user){
+		UserResponseDto updatedUser = userService.updateProfile(user);
+		return new ResponseEntity<>(updatedUser, HttpStatus.OK);
+	}
+	
+	@PutMapping("/update-password")
+	ResponseEntity<String> updatePassword(@RequestBody com.sourav.kothika.domain.dto.UpdatePasswordRequest request){
+		userService.updatePassword(request);
+		return new ResponseEntity<>("Password updated successfully", HttpStatus.OK);
+	}
 }

@@ -39,4 +39,6 @@ public class PostRequestDto {
 
     @NotNull(message = "Reading time is required")
     private Integer readingTime;	
+
+    private java.util.List<MediaAttachmentDto> mediaAttachments;
 }

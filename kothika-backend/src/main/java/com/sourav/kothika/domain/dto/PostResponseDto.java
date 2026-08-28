@@ -27,4 +27,7 @@ public class PostResponseDto {
     private Integer readingTime;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    
+    private UUID authorId;
+    private java.util.List<MediaAttachmentDto> mediaAttachments;
 }
