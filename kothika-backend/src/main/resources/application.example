@@ -1,0 +1,15 @@
+spring.datasource.url=jdbc:mysql://localhost:3306/kothikaDB?createDatabaseIfNotExist=true
+spring.datasource.username={Your_Username}
+spring.datasource.password={Your Password}
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=false
+
+server.servlet.context-path=/api/v1
+
+
+jwt.secretKey={JWT_Secret}
+
+ai.gemini.api-key={GEMINI_API_KEY}
